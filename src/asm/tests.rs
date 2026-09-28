@@ -62,6 +62,8 @@ pub(super) struct Field {
     /// Inputs and outputs of `invert`: `7R`, `0`, `1`, `p - 1`, and a small value, from the
     /// integer model of the algorithm.
     pub(super) inversions: [(Limbs, Limbs); 5],
+    /// The Montgomery inverse by the field type's portable arithmetic, independent of the backend.
+    pub(super) portable_inverse: fn(&Limbs) -> Limbs,
 }
 
 /// The Pallas base field (`pasta_curves::Fp`).
@@ -141,6 +143,7 @@ const FP: Field = Field {
             [0x33912c173eb52b5e, 0x8094d7a33b979988, 0x4c1c894cf5cc5f05, 0x2d05c75a616fc8d4],
         ),
     ],
+    portable_inverse: fp_inverse,
 };
 
 /// The Vesta base field (`pasta_curves::Fq`).
@@ -220,6 +223,7 @@ const FQ: Field = Field {
             [0xe5c6fb7bddd0cf4b, 0x65ee805e3b7d0d89, 0x7562671be840d861, 0x1253ce66fd1d1868],
         ),
     ],
+    portable_inverse: fq_inverse,
 };
 
 pub(super) const FIELDS: [&Field; 2] = [&FP, &FQ];
@@ -232,6 +236,16 @@ pub(super) fn p_minus_1(f: &Field) -> Limbs {
     let mut limbs = f.modulus;
     limbs[0] -= 1;
     limbs
+}
+
+/// The Montgomery inverse of the Montgomery residue `x` by `Fp`'s portable arithmetic.
+fn fp_inverse(x: &Limbs) -> Limbs {
+    ff::Field::invert(&crate::fields::Fp(*x)).unwrap().0
+}
+
+/// The Montgomery inverse of the Montgomery residue `x` by `Fq`'s portable arithmetic.
+fn fq_inverse(x: &Limbs) -> Limbs {
+    ff::Field::invert(&crate::fields::Fq(*x)).unwrap().0
 }
 
 /// The canonical integer of a field element, from its little-endian `to_repr`.
@@ -265,7 +279,7 @@ fn known_answers_match_the_portable_arithmetic() {
             let two = $field::from_u512([2, 0, 0, 0, 0, 0, 0, 0]);
             assert_eq!(canonical_integer(ff::Field::pow_vartime(&two, [562])), f.v0);
             for (x, z) in &f.inversions {
-                let expected = if *x == ZERO { ZERO } else { ff::Field::invert(&el(*x)).unwrap().0 };
+                let expected = if *x == ZERO { ZERO } else { (f.portable_inverse)(x) };
                 assert_eq!(expected, *z, "{x:x?}");
             }
         }};
