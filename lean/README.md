@@ -45,7 +45,8 @@ a re-derivation of the algorithms:
 - `src/asm/x86_64.rs`: `add`, `sub`, `mul`, `square_lo`, `square_hi`, and `from_mont`.
 
 Some of the crate's other entry points, `sqr_n_mul`, `from_mont`, and `invert`, are Rust
-compositions of assembly blocks on some architectures, and are modelled as such.
+compositions of assembly blocks on some architectures, and are modelled as such. The portable Rust
+blocks of `invert` (`src/inversion/portable.rs`), which every other target runs, are not modelled.
 
 The multiplication and squaring blocks are transcriptions of Semolina v0.1.4's
 `mul_mont_pasta` and of the squaring loop body of its `sqr_n_mul_mont_pasta`, and the addition

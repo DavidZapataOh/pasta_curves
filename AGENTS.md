@@ -94,13 +94,13 @@ Co-Authored-By: Claude <noreply@anthropic.com>
 
 ## The assembly backends (`src/asm`)
 
-The `asm` module provides assembly backends for the Pasta field arithmetic. It contains an
-AArch64 backend and an x86-64 backend: Montgomery multiplication and squaring, and modular
-addition and subtraction, as inline `asm!` blocks, and a repeated-squaring chain and conversion
-out of Montgomery form composed from them; and, on AArch64, a constant-time inversion composed
-from six more blocks. It is the one part of the crate that allows unsafe code. Its priorities
-are those of the crate: **correctness, constant-time behaviour, and performance**, in that
-order.
+The `asm` module provides assembly backends for the Pasta field arithmetic. It contains an AArch64
+backend and an x86-64 backend: Montgomery multiplication and squaring, and modular addition and
+subtraction, as inline `asm!` blocks, and a repeated-squaring chain and conversion out of Montgomery
+form composed from them; and, on AArch64, the six blocks of a constant-time inversion, whose driver
+(`src/inversion.rs`) runs the same blocks in portable Rust on every other target. It is the one part
+of the crate that allows unsafe code. Its priorities are those of the crate: **correctness,
+constant-time behaviour, and performance**, in that order.
 
 The Montgomery routines are transcriptions of Supranational's Semolina v0.1.4, and the
 inversion's blocks are adapted from s2n-bignum's `bignum_montinv_p256` (see

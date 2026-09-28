@@ -4,8 +4,8 @@
 //! (`a * b * 2^-256 mod p`) in Python, and a test checks each against the portable arithmetic of
 //! the field types, which also supplies the reference products and inverses.
 
-use crate::asm::Limbs;
 use crate::fields::{fp, fq};
+use crate::limbs::Limbs;
 
 /// One field's constants, from its field type, and known answers.
 pub(crate) struct Field {
@@ -100,24 +100,74 @@ pub(crate) const FP: Field = Field {
     ],
     inversions: [
         (
-            [0xd83bd700ffffffe5, 0x628ddd6b04e1ba16, 0xfffffffffffffffc, 0x3fffffffffffffff],
-            [0x8398bdd8b6db6db7, 0xbbc0f148939d4828, 0xdb6db6db6db6db6d, 0x2db6db6db6db6db6],
+            [
+                0xd83bd700ffffffe5,
+                0x628ddd6b04e1ba16,
+                0xfffffffffffffffc,
+                0x3fffffffffffffff,
+            ],
+            [
+                0x8398bdd8b6db6db7,
+                0xbbc0f148939d4828,
+                0xdb6db6db6db6db6d,
+                0x2db6db6db6db6db6,
+            ],
         ),
         (
-            [0x0000000000000000, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000],
-            [0x0000000000000000, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000],
+            [
+                0x0000000000000000,
+                0x0000000000000000,
+                0x0000000000000000,
+                0x0000000000000000,
+            ],
+            [
+                0x0000000000000000,
+                0x0000000000000000,
+                0x0000000000000000,
+                0x0000000000000000,
+            ],
         ),
         (
-            [0x0000000000000001, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000],
-            [0x8c78ecb30000000f, 0xd7d30dbd8b0de0e7, 0x7797a99bc3c95d18, 0x096d41af7b9cb714],
+            [
+                0x0000000000000001,
+                0x0000000000000000,
+                0x0000000000000000,
+                0x0000000000000000,
+            ],
+            [
+                0x8c78ecb30000000f,
+                0xd7d30dbd8b0de0e7,
+                0x7797a99bc3c95d18,
+                0x096d41af7b9cb714,
+            ],
         ),
         (
-            [0x992d30ed00000000, 0x224698fc094cf91b, 0x0000000000000000, 0x4000000000000000],
-            [0x0cb44439fffffff2, 0x4a738b3e7e3f1834, 0x886856643c36a2e7, 0x3692be50846348eb],
+            [
+                0x992d30ed00000000,
+                0x224698fc094cf91b,
+                0x0000000000000000,
+                0x4000000000000000,
+            ],
+            [
+                0x0cb44439fffffff2,
+                0x4a738b3e7e3f1834,
+                0x886856643c36a2e7,
+                0x3692be50846348eb,
+            ],
         ),
         (
-            [0xfc962fc962fc9630, 0x369d0369d0369cd2, 0x0000000000000000, 0x0000000000000000],
-            [0x33912c173eb52b5e, 0x8094d7a33b979988, 0x4c1c894cf5cc5f05, 0x2d05c75a616fc8d4],
+            [
+                0xfc962fc962fc9630,
+                0x369d0369d0369cd2,
+                0x0000000000000000,
+                0x0000000000000000,
+            ],
+            [
+                0x33912c173eb52b5e,
+                0x8094d7a33b979988,
+                0x4c1c894cf5cc5f05,
+                0x2d05c75a616fc8d4,
+            ],
         ),
     ],
     portable_mul: fp_mul,
@@ -181,24 +231,74 @@ pub(crate) const FQ: Field = Field {
     ],
     inversions: [
         (
-            [0x34853384ffffffe5, 0x628ddd6afd5230a2, 0xfffffffffffffffc, 0x3fffffffffffffff],
-            [0x81c0fd04b6db6db7, 0xbbc0f14893a785d6, 0xdb6db6db6db6db6d, 0x2db6db6db6db6db6],
+            [
+                0x34853384ffffffe5,
+                0x628ddd6afd5230a2,
+                0xfffffffffffffffc,
+                0x3fffffffffffffff,
+            ],
+            [
+                0x81c0fd04b6db6db7,
+                0xbbc0f14893a785d6,
+                0xdb6db6db6db6db6d,
+                0x2db6db6db6db6db6,
+            ],
         ),
         (
-            [0x0000000000000000, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000],
-            [0x0000000000000000, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000],
+            [
+                0x0000000000000000,
+                0x0000000000000000,
+                0x0000000000000000,
+                0x0000000000000000,
+            ],
+            [
+                0x0000000000000000,
+                0x0000000000000000,
+                0x0000000000000000,
+                0x0000000000000000,
+            ],
         ),
         (
-            [0x0000000000000001, 0x0000000000000000, 0x0000000000000000, 0x0000000000000000],
-            [0xfc9678ff0000000f, 0x67bb433d891a16e3, 0x7fae231004ccf590, 0x096d41af7ccfdaa9],
+            [
+                0x0000000000000001,
+                0x0000000000000000,
+                0x0000000000000000,
+                0x0000000000000000,
+            ],
+            [
+                0xfc9678ff0000000f,
+                0x67bb433d891a16e3,
+                0x7fae231004ccf590,
+                0x096d41af7ccfdaa9,
+            ],
         ),
         (
-            [0x8c46eb2100000000, 0x224698fc0994a8dd, 0x0000000000000000, 0x4000000000000000],
-            [0x8fb07221fffffff2, 0xba8b55be807a91f9, 0x8051dceffb330a6f, 0x3692be5083302556],
+            [
+                0x8c46eb2100000000,
+                0x224698fc0994a8dd,
+                0x0000000000000000,
+                0x4000000000000000,
+            ],
+            [
+                0x8fb07221fffffff2,
+                0xba8b55be807a91f9,
+                0x8051dceffb330a6f,
+                0x3692be5083302556,
+            ],
         ),
         (
-            [0xfc962fc962fc9630, 0x369d0369d0369cd2, 0x0000000000000000, 0x0000000000000000],
-            [0xe5c6fb7bddd0cf4b, 0x65ee805e3b7d0d89, 0x7562671be840d861, 0x1253ce66fd1d1868],
+            [
+                0xfc962fc962fc9630,
+                0x369d0369d0369cd2,
+                0x0000000000000000,
+                0x0000000000000000,
+            ],
+            [
+                0xe5c6fb7bddd0cf4b,
+                0x65ee805e3b7d0d89,
+                0x7562671be840d861,
+                0x1253ce66fd1d1868,
+            ],
         ),
     ],
     portable_mul: fq_mul,
@@ -282,7 +382,11 @@ fn known_answers_match_the_portable_arithmetic() {
             let two = $field::from_u512([2, 0, 0, 0, 0, 0, 0, 0]);
             assert_eq!(canonical_integer(ff::Field::pow_vartime(&two, [562])), f.v0);
             for (x, z) in &f.inversions {
-                let expected = if *x == ZERO { ZERO } else { (f.portable_inverse)(x) };
+                let expected = if *x == ZERO {
+                    ZERO
+                } else {
+                    (f.portable_inverse)(x)
+                };
                 assert_eq!(expected, *z, "{x:x?}");
             }
         }};
