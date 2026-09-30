@@ -55,6 +55,8 @@ struct Field {
     pm1_sq: Limbs,
     /// `p - 2`.
     pm2: Limbs,
+    /// `from_mont` of the all-ones input, `(2^256 - 1) R^-1 mod p`.
+    from_mont_ones: Limbs,
 }
 
 /// The Pallas base field (`pasta_curves::Fp`).
@@ -99,6 +101,12 @@ const FP: Field = Field {
         0x224698fc094cf91b,
         0x0000000000000000,
         0x4000000000000000,
+    ],
+    from_mont_ones: [
+        0xc9eda265ac589659,
+        0x75a6de91c8d4fcc3,
+        0x8f34d6691037659a,
+        0x1e0e3b00e1dd872a,
     ],
 };
 
@@ -145,6 +153,12 @@ const FQ: Field = Field {
         0x0000000000000000,
         0x4000000000000000,
     ],
+    from_mont_ones: [
+        0x2b2d474371e59083,
+        0x5bb8b7d46bcea6f2,
+        0xa86f41a73faf20ec,
+        0x20857622e89b86ac,
+    ],
 };
 
 const FIELDS: [&Field; 2] = [&FP, &FQ];
@@ -157,6 +171,12 @@ fn p_minus_1(f: &Field) -> Limbs {
     let mut limbs = f.modulus;
     limbs[0] -= 1;
     limbs
+}
+
+/// The canonical integer of a field element, from its little-endian `to_repr`.
+fn canonical_integer<F: ff::PrimeField<Repr = [u8; 32]>>(element: F) -> Limbs {
+    let repr = element.to_repr();
+    core::array::from_fn(|i| u64::from_le_bytes(repr[8 * i..8 * (i + 1)].try_into().unwrap()))
 }
 
 /// The known answers above that are not the field types' own constants, recomputed by the
@@ -175,6 +195,10 @@ fn known_answers_match_the_portable_arithmetic() {
             assert_eq!((el(f.r2) * el(f.r3)).0, f.r4);
             assert_eq!((el(f.r2).square().square() * el(f.r3)).0, f.r7);
             assert_eq!((pm1 * pm1).0, f.pm1_sq);
+            // The element whose Montgomery form is the all-ones input (mod `p`), as in
+            // `entry_points_match_the_portable_arithmetic`; its canonical integer is `to_repr`.
+            let ones = $field::from_u512([u64::MAX, u64::MAX, u64::MAX, u64::MAX, 0, 0, 0, 0]);
+            assert_eq!(canonical_integer(ones * el(ONE)), f.from_mont_ones);
         }};
     }
     check!(Fp, &FP);
@@ -189,7 +213,6 @@ fn known_answers_match_the_portable_arithmetic() {
 /// they range over every four-limb value, under each of the multiplication's two contracts.
 #[test]
 fn entry_points_match_the_portable_arithmetic() {
-    use ff::PrimeField;
     use rand::{Rng, SeedableRng};
     use rand_xorshift::XorShiftRng;
 
@@ -238,10 +261,7 @@ fn entry_points_match_the_portable_arithmetic() {
                 }
             }
             for a in any() {
-                let repr = el(a).to_repr();
-                let expected: Limbs = core::array::from_fn(|i| {
-                    u64::from_le_bytes(repr[8 * i..8 * (i + 1)].try_into().unwrap())
-                });
+                let expected = canonical_integer(el(a));
                 assert_eq!(from_mont(a, &f.modulus, f.inv), expected, "{a:x?}");
             }
         }};
@@ -319,27 +339,10 @@ fn from_mont_known_answers() {
         assert_eq!(from_mont(&f.r, &f.modulus, f.inv), ONE);
         assert_eq!(from_mont(&f.r2, &f.modulus, f.inv), f.r);
         assert_eq!(from_mont(&ZERO, &f.modulus, f.inv), ZERO);
+        // `from_mont` accepts any four-limb value: the all-ones input is the
+        // extreme case of that contract, where the candidate is largest.
+        assert_eq!(from_mont(&[u64::MAX; 4], &f.modulus, f.inv), f.from_mont_ones);
     }
-    // `from_mont` accepts any four-limb value: the all-ones input is the
-    // extreme case of that contract, where the candidate is largest.
-    assert_eq!(
-        from_mont(&[u64::MAX; 4], &FP.modulus, FP.inv),
-        [
-            0xc9eda265ac589659,
-            0x75a6de91c8d4fcc3,
-            0x8f34d6691037659a,
-            0x1e0e3b00e1dd872a,
-        ]
-    );
-    assert_eq!(
-        from_mont(&[u64::MAX; 4], &FQ.modulus, FQ.inv),
-        [
-            0x2b2d474371e59083,
-            0x5bb8b7d46bcea6f2,
-            0xa86f41a73faf20ec,
-            0x20857622e89b86ac,
-        ]
-    );
 }
 
 /// The reference vectors: outputs of Semolina's `mul_mont_pasta`, `sqr_mont_pasta`, and
