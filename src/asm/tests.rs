@@ -1,4 +1,5 @@
-//! Known-answer tests of the entry points, for both Pasta fields.
+//! Tests of the entry points, for both Pasta fields: known answers, the reference
+//! vectors, and a differential test against the portable arithmetic.
 //!
 //! The moduli and the Montgomery constants are the field types' own. The other
 //! expected values were computed independently with big-integer Montgomery
@@ -6,10 +7,9 @@
 //! the portable arithmetic. Every multiplication, squaring, and conversion case is
 //! also among the reference vectors recorded from the assembly on Apple M-series
 //! hardware, and agrees with it; the vectors have no addition, subtraction, or
-//! repeated-squaring cases. The differential tests against the portable arithmetic
-//! are those of zcash/pasta_curves#100: `aarch64_asm_matches_portable_arithmetic`
-//! and the `mul` tests beside it in `src/fields/fp.rs` and `src/fields/fq.rs`. The
-//! field types do not use the backend yet.
+//! repeated-squaring cases. The differential test compares every entry point with
+//! the portable arithmetic of the field types, on edge and pseudo-random operands,
+//! so it covers those routines too. The field types do not use the backend yet.
 
 use super::{Limbs, add, from_mont, sub};
 
@@ -175,6 +175,75 @@ fn known_answers_match_the_portable_arithmetic() {
             assert_eq!((el(f.r2) * el(f.r3)).0, f.r4);
             assert_eq!((el(f.r2).square().square() * el(f.r3)).0, f.r7);
             assert_eq!((pm1 * pm1).0, f.pm1_sq);
+        }};
+    }
+    check!(Fp, &FP);
+    check!(Fq, &FQ);
+}
+
+/// The entry points agree with the portable arithmetic of the field types, on edge operands and
+/// on pseudo-random ones. A Montgomery residue `x`, reduced or not, is the element whose value
+/// is `x R^-1`: `from_u512` gives the element of value `x`, and a multiplication by the element
+/// whose Montgomery form is `1` divides by `R`. The canonical integer of an element is its
+/// `to_repr`. The operands are canonical where a routine's contract asks for that; elsewhere
+/// they range over every four-limb value, under each of the multiplication's two contracts.
+#[test]
+fn entry_points_match_the_portable_arithmetic() {
+    use ff::PrimeField;
+    use rand::{Rng, SeedableRng};
+    use rand_xorshift::XorShiftRng;
+
+    macro_rules! check {
+        ($field:ident, $f:expr) => {{
+            use crate::fields::$field;
+            let f = $f;
+            let el = |x: &Limbs| {
+                $field::from_u512([x[0], x[1], x[2], x[3], 0, 0, 0, 0]) * $field(ONE)
+            };
+            let mut rng = XorShiftRng::from_seed([0x5a; 16]);
+            let random_any: [Limbs; 32] =
+                core::array::from_fn(|_| core::array::from_fn(|_| rng.next_u64()));
+            // The Montgomery forms of elements reduced from 512 random bits, close to uniform.
+            let random_canonical: [Limbs; 32] = core::array::from_fn(|_| {
+                $field::from_u512(core::array::from_fn(|_| rng.next_u64())).0
+            });
+
+            let high = [u64::MAX, u64::MAX, u64::MAX, (1 << 62) - 1];
+            let edge_canonical = [ZERO, ONE, f.r, p_minus_1(f), f.pm2, high];
+            let edge_any = [[u64::MAX; 4], f.modulus, [0, 0, 0, u64::MAX]];
+            let canonical = || edge_canonical.iter().chain(&random_canonical);
+            let any = || canonical().chain(&edge_any).chain(&random_any);
+
+            for a in canonical() {
+                assert_eq!(square(a, &f.modulus, f.inv), el(a).square().0, "{a:x?}");
+                for b in canonical() {
+                    assert_eq!(add(a, b, &f.modulus), (el(a) + el(b)).0, "{a:x?} {b:x?}");
+                    assert_eq!(sub(a, b, &f.modulus), (el(a) - el(b)).0, "{a:x?} {b:x?}");
+                }
+                for b in any() {
+                    let product = el(a) * el(b);
+                    assert_eq!(mul(a, b, &f.modulus, f.inv), product.0, "{a:x?} {b:x?}");
+                    // The other contract: any left operand, with a canonical right operand
+                    // whose limbs 1 to 3 are at most `2^64 - 3`.
+                    if super::mul_contract(b, a, &f.modulus) {
+                        assert_eq!(mul(b, a, &f.modulus, f.inv), product.0, "{b:x?} {a:x?}");
+                    }
+                    let mut power = el(a);
+                    for count in 0..4 {
+                        let expected = (power * el(b)).0;
+                        let actual = sqr_n_mul(a, count, b, &f.modulus, f.inv);
+                        assert_eq!(actual, expected, "{a:x?} {count} {b:x?}");
+                        power = power.square();
+                    }
+                }
+            }
+            for a in any() {
+                let repr = el(a).to_repr();
+                let expected: Limbs = core::array::from_fn(|i| {
+                    u64::from_le_bytes(repr[8 * i..8 * (i + 1)].try_into().unwrap())
+                });
+                assert_eq!(from_mont(a, &f.modulus, f.inv), expected, "{a:x?}");
+            }
         }};
     }
     check!(Fp, &FP);
