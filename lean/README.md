@@ -55,7 +55,9 @@ PastaAArch64Asm/Vectors.lean          GENERATED: reference vectors, kernel-check
 PastaAArch64Asm/Spec.lean             the theorems about the blocks and the compositions
 PastaAArch64Asm/Entry.lean            the theorems about the crate's entry points at its fields
 ../test-vectors/pasta_mul-armv8-vectors.txt   the hardware outputs the examples are generated from
-scripts/gen.py                        `asm!` front end + Lean emitter, proof skeletons
+scripts/gen.py                        the generator's configuration: blocks, modules, vectors
+scripts/asm2lean/                     the compiler: `asm!` front end, AArch64 lifter, IR,
+                                      loop rerolling, Lean and proof-skeleton back ends
 scripts/check.sh                      regenerate and diff, skeleton check (CI)
 scripts/check_nanoda.sh               re-check the build with an independent kernel (CI)
 ```
