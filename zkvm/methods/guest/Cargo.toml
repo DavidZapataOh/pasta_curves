@@ -1,0 +1,15 @@
+[package]
+name = "check"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[workspace]
+
+[dependencies]
+ops = { path = "../../ops" }
+pasta_curves = { path = "../../..", default-features = false, features = ["alloc", "bits", "sqrt-table"] }
+risc0-zkvm = { version = "=3.0.6", default-features = false, features = ["std"] }
+
+[profile.release]
+lto = true

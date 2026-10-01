@@ -1,4 +1,6 @@
 /target
+/zkvm/target
+/zkvm/methods/guest/target
 **/*.rs.bk
 .vscode
 **/*.html

@@ -1,0 +1,6 @@
+[workspace]
+resolver = "2"
+members = ["methods", "ops"]
+
+[profile.dev]
+opt-level = 3

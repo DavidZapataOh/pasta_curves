@@ -1,0 +1,8 @@
+[package]
+name = "ops"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+pasta_curves = { path = "../..", default-features = false, features = ["alloc", "bits", "sqrt-table"] }

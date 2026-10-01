@@ -15,6 +15,9 @@ use crate::arithmetic::{adc, mac, sbb, SqrtTableHelpers};
 #[cfg(feature = "deferred")]
 use crate::deferred::{DeferredField, Product};
 
+#[cfg(all(target_os = "zkvm", target_arch = "riscv32"))]
+use risc0_bigint2::field;
+
 #[cfg(feature = "sqrt-table")]
 use crate::arithmetic::SqrtTables;
 
@@ -187,6 +190,23 @@ impl<T: ::core::borrow::Borrow<Fq>> ::core::iter::Product<T> for Fq {
     }
 }
 
+#[cfg(all(target_os = "zkvm", target_arch = "riscv32"))]
+impl Fq {
+    pub(crate) const MODULUS_LIMBS_32: [u32; 8] = MODULUS_LIMBS_32;
+
+    /// Returns this element as 32-bit little-endian limbs, out of Montgomery form.
+    pub(crate) fn to_canonical_u32(self) -> [u32; 8] {
+        let mut res = [0u32; 8];
+        field::modmul_256(
+            bytemuck::cast_ref(&self.0),
+            bytemuck::cast_ref(&R_INV.0),
+            &MODULUS_LIMBS_32,
+            &mut res,
+        );
+        res
+    }
+}
+
 /// INV = -(q^{-1} mod 2^64) mod 2^64
 const INV: u64 = 0x8c46eb20ffffffff;
 
@@ -212,6 +232,15 @@ const R3: Fq = Fq([
     0xe13bda50dba41326,
     0x88fececb8e15cb63,
     0x07dd97a06e6792c8,
+]);
+
+/// R^-1 = 2^-256 mod q
+#[cfg(all(target_os = "zkvm", target_arch = "riscv32"))]
+const R_INV: Fq = Fq([
+    0x6119a3dd8e1a6f7f,
+    0xc68de1279dc601eb,
+    0x5790be58c050df13,
+    0x1f7a89dd17647953,
 ]);
 
 /// `GENERATOR = 5 mod q` is a generator of the `q - 1` order multiplicative
@@ -304,14 +333,23 @@ impl Fq {
     /// Converts from an integer represented in little endian
     /// into its (congruent) `Fq` representation.
     pub const fn from_raw(val: [u64; 4]) -> Self {
-        (&Fq(val)).mul(&R2)
+        let u = Fq(val).mul_unreduced(&R2);
+        Fq::montgomery_reduce(u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7])
     }
 
     /// Squares this element.
+    #[cfg(not(all(target_os = "zkvm", target_arch = "riscv32")))]
     #[cfg_attr(not(feature = "uninline-portable"), inline)]
     pub const fn square(&self) -> Fq {
         let u = self.square_unreduced();
         Fq::montgomery_reduce(u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7])
+    }
+
+    /// Squares this element.
+    #[cfg(all(target_os = "zkvm", target_arch = "riscv32"))]
+    #[inline]
+    pub fn square(&self) -> Fq {
+        self.mul(self)
     }
 
     #[allow(clippy::too_many_arguments)]
@@ -363,10 +401,33 @@ impl Fq {
     }
 
     /// Multiplies `rhs` by `self`, returning the result.
+    #[cfg(not(all(target_os = "zkvm", target_arch = "riscv32")))]
     #[cfg_attr(not(feature = "uninline-portable"), inline)]
     pub const fn mul(&self, rhs: &Self) -> Self {
         let u = self.mul_unreduced(rhs);
         Fq::montgomery_reduce(u[0], u[1], u[2], u[3], u[4], u[5], u[6], u[7])
+    }
+
+    /// Multiplies `rhs` by `self`, returning the result.
+    #[cfg(all(target_os = "zkvm", target_arch = "riscv32"))]
+    #[inline]
+    pub fn mul(&self, rhs: &Self) -> Self {
+        // (aR * bR) * R^-1 = abR
+        let mut ab = [0u32; 8];
+        field::unchecked::modmul_256(
+            bytemuck::cast_ref(&self.0),
+            bytemuck::cast_ref(&rhs.0),
+            &MODULUS_LIMBS_32,
+            &mut ab,
+        );
+        let mut res = [0u32; 8];
+        field::modmul_256(
+            &ab,
+            bytemuck::cast_ref(&R_INV.0),
+            &MODULUS_LIMBS_32,
+            &mut res,
+        );
+        Fq(bytemuck::cast(res))
     }
 
     /// Subtracts `rhs` from `self`, returning the result.
@@ -448,6 +509,7 @@ impl Fq {
 
     /// Squares this element, returning the unreduced 512-bit product.
     #[cfg_attr(not(feature = "uninline-portable"), inline)]
+    #[cfg_attr(all(target_os = "zkvm", target_arch = "riscv32"), allow(dead_code))]
     pub(crate) const fn square_unreduced(&self) -> [u64; 8] {
         let (r1, carry) = mac(0, self.0[0], self.0[1], 0);
         let (r2, carry) = mac(0, self.0[0], self.0[2], carry);
@@ -576,6 +638,22 @@ impl ff::Field for Fq {
 
     /// Computes the multiplicative inverse of this element,
     /// failing if the element is zero.
+    #[cfg(all(target_os = "zkvm", target_arch = "riscv32"))]
+    fn invert(&self) -> CtOption<Self> {
+        if bool::from(self.ct_eq(&Self::zero())) {
+            return CtOption::new(Self::zero(), Choice::from(0));
+        }
+        // (aR)^-1 * R^2 = a^-1 R
+        let mut inv = [0u32; 8];
+        field::unchecked::modinv_256(bytemuck::cast_ref(&self.0), &MODULUS_LIMBS_32, &mut inv);
+        let mut res = [0u32; 8];
+        field::modmul_256(&inv, bytemuck::cast_ref(&R2.0), &MODULUS_LIMBS_32, &mut res);
+        CtOption::new(Fq(bytemuck::cast(res)), Choice::from(1))
+    }
+
+    /// Computes the multiplicative inverse of this element,
+    /// failing if the element is zero.
+    #[cfg(not(all(target_os = "zkvm", target_arch = "riscv32")))]
     fn invert(&self) -> CtOption<Self> {
         let tmp = self.pow_vartime(&[
             0x8c46eb20ffffffff,
@@ -660,6 +738,12 @@ impl ff::PrimeField for Fq {
         CtOption::new(tmp, Choice::from(is_some))
     }
 
+    #[cfg(all(target_os = "zkvm", target_arch = "riscv32"))]
+    fn to_repr(&self) -> Self::Repr {
+        bytemuck::cast(self.to_canonical_u32())
+    }
+
+    #[cfg(not(all(target_os = "zkvm", target_arch = "riscv32")))]
     fn to_repr(&self) -> Self::Repr {
         // Turn into canonical form by computing
         // (a.R) / R = a

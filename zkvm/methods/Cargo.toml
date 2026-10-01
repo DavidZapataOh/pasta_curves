@@ -1,0 +1,15 @@
+[package]
+name = "methods"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[build-dependencies]
+risc0-build = "=3.0.6"
+
+[dev-dependencies]
+ops = { path = "../ops" }
+risc0-zkvm = { version = "=3.0.6", features = ["client"] }
+
+[package.metadata.risc0]
+methods = ["guest"]
