@@ -126,12 +126,13 @@ jobs:
             work/nanoda_lib/target/release/nanoda_bin
 
   lean-ci:
-    # The single stable check to mark as a required status check. It always runs, so it always
-    # reports; it fails only if a job that ran failed. `nanoda` needs `build`, so it is skipped
-    # with it.
+    # The single stable check to mark as a required status check. It runs unless the workflow run
+    # was cancelled, and fails only if a job that ran failed. A run that a newer one cancels (two
+    # pushes in quick succession, as with stacked branches) reports nothing; the newer run reports
+    # instead. `nanoda` needs `build`, so it is skipped with it.
     name: Lean CI
     needs: [changes, build, transcription, checker-tests, nanoda]
-    if: always()
+    if: ${{ !cancelled() }}
     runs-on: ubuntu-latest
     steps:
       - name: Gate on the jobs' results
