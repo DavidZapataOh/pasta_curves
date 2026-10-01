@@ -205,6 +205,14 @@ impl Fp {
         );
         res
     }
+
+    /// Converts 32-bit little-endian limbs of an integer less than the modulus
+    /// into Montgomery form.
+    pub(crate) fn from_canonical_u32(limbs: &[u32; 8]) -> Self {
+        let mut res = [0u32; 8];
+        field::modmul_256(limbs, bytemuck::cast_ref(&R.0), &MODULUS_LIMBS_32, &mut res);
+        Fp(bytemuck::cast(res))
+    }
 }
 
 /// INV = -(p^{-1} mod 2^64) mod 2^64

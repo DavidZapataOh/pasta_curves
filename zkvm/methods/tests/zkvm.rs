@@ -58,3 +58,20 @@ fn field_operations_are_accelerated() {
         ],
     );
 }
+
+#[test]
+fn curve_operations_are_accelerated() {
+    within(
+        &costs(),
+        &[
+            ("Pallas Point + Point", 6, 2_000),
+            ("Pallas Point + Affine", 7, 2_000),
+            ("Pallas double", 8, 1_200),
+            ("Pallas to_affine", 9, 1_500),
+            ("Pallas scalar mul", 10, 800_000),
+            ("Vesta Point + Point", 11, 2_000),
+            ("Vesta Point + Affine", 12, 2_000),
+            ("Vesta double", 13, 1_200),
+        ],
+    );
+}

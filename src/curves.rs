@@ -26,6 +26,22 @@ use super::{Fp, Fq};
 #[cfg(feature = "alloc")]
 use crate::arithmetic::{Coordinates, CurveAffine, CurveExt};
 
+#[cfg(all(target_os = "zkvm", target_arch = "riscv32"))]
+use risc0_bigint2::ec;
+
+/// Converts 64-bit little-endian limbs to 32-bit little-endian limbs.
+#[cfg(all(target_os = "zkvm", target_arch = "riscv32"))]
+const fn u64_to_u32(limbs: [u64; 4]) -> [u32; 8] {
+    let mut words = [0; 8];
+    let mut i = 0;
+    while i < 4 {
+        words[2 * i] = limbs[i] as u32;
+        words[2 * i + 1] = (limbs[i] >> 32) as u32;
+        i += 1;
+    }
+    words
+}
+
 macro_rules! new_curve_impl {
     (($($privacy:tt)*), $name:ident, $name_affine:ident, $iso:ident, $base:ident, $scalar:ident,
      $curve_id:literal, $a_raw:expr, $b_raw:expr, $curve_type:ident) => {
@@ -45,6 +61,51 @@ macro_rules! new_curve_impl {
 
             const fn curve_constant_b() -> $base {
                 $base::from_raw($b_raw)
+            }
+        }
+
+        #[cfg(all(target_os = "zkvm", target_arch = "riscv32"))]
+        impl ec::Curve<8> for $name {
+            const CURVE: &'static ec::WeierstrassCurve<8> = &ec::WeierstrassCurve::new(
+                $base::MODULUS_LIMBS_32,
+                u64_to_u32($a_raw),
+                u64_to_u32($b_raw),
+            );
+        }
+
+        #[cfg(all(target_os = "zkvm", target_arch = "riscv32"))]
+        impl<'a> From<&'a $name> for ec::AffinePoint<8, $name> {
+            fn from(p: &'a $name) -> Self {
+                if bool::from(p.z == $base::one()) {
+                    ec::AffinePoint::new_unchecked(p.x.to_canonical_u32(), p.y.to_canonical_u32())
+                } else {
+                    ec::AffinePoint::from(&p.to_affine())
+                }
+            }
+        }
+
+        #[cfg(all(target_os = "zkvm", target_arch = "riscv32"))]
+        impl<'a> From<&'a $name_affine> for ec::AffinePoint<8, $name> {
+            fn from(p: &'a $name_affine) -> Self {
+                if bool::from(p.is_identity()) {
+                    ec::AffinePoint::IDENTITY
+                } else {
+                    ec::AffinePoint::new_unchecked(p.x.to_canonical_u32(), p.y.to_canonical_u32())
+                }
+            }
+        }
+
+        #[cfg(all(target_os = "zkvm", target_arch = "riscv32"))]
+        impl<'a> From<&'a ec::AffinePoint<8, $name>> for $name {
+            fn from(p: &'a ec::AffinePoint<8, $name>) -> $name {
+                match p.as_u32s() {
+                    Some([x, y]) => $name {
+                        x: $base::from_canonical_u32(x),
+                        y: $base::from_canonical_u32(y),
+                        z: $base::one(),
+                    },
+                    None => $name::identity(),
+                }
             }
         }
 
@@ -91,6 +152,13 @@ macro_rules! new_curve_impl {
             }
 
             impl_projective_curve_specific!($name, $base, $curve_type);
+
+            #[cfg(all(target_os = "zkvm", target_arch = "riscv32"))]
+            fn double(&self) -> Self {
+                let mut res = ec::AffinePoint::IDENTITY;
+                ec::AffinePoint::from(self).double(&mut res);
+                $name::from(&res)
+            }
 
             fn identity() -> Self {
                 Self {
@@ -359,6 +427,18 @@ macro_rules! new_curve_impl {
             }
         }
 
+        #[cfg(all(target_os = "zkvm", target_arch = "riscv32"))]
+        impl<'a, 'b> Add<&'a $name> for &'b $name {
+            type Output = $name;
+
+            fn add(self, rhs: &'a $name) -> $name {
+                let mut res = ec::AffinePoint::IDENTITY;
+                ec::AffinePoint::from(self).add(&rhs.into(), &mut res);
+                $name::from(&res)
+            }
+        }
+
+        #[cfg(not(all(target_os = "zkvm", target_arch = "riscv32")))]
         impl<'a, 'b> Add<&'a $name> for &'b $name {
             type Output = $name;
 
@@ -403,6 +483,18 @@ macro_rules! new_curve_impl {
             }
         }
 
+        #[cfg(all(target_os = "zkvm", target_arch = "riscv32"))]
+        impl<'a, 'b> Add<&'a $name_affine> for &'b $name {
+            type Output = $name;
+
+            fn add(self, rhs: &'a $name_affine) -> $name {
+                let mut res = ec::AffinePoint::IDENTITY;
+                ec::AffinePoint::from(self).add(&rhs.into(), &mut res);
+                $name::from(&res)
+            }
+        }
+
+        #[cfg(not(all(target_os = "zkvm", target_arch = "riscv32")))]
         impl<'a, 'b> Add<&'a $name_affine> for &'b $name {
             type Output = $name;
 
@@ -522,6 +614,18 @@ macro_rules! new_curve_impl {
             }
         }
 
+        #[cfg(all(target_os = "zkvm", target_arch = "riscv32"))]
+        impl<'a, 'b> Add<&'a $name_affine> for &'b $name_affine {
+            type Output = $name;
+
+            fn add(self, rhs: &'a $name_affine) -> $name {
+                let mut res = ec::AffinePoint::IDENTITY;
+                ec::AffinePoint::from(self).add(&rhs.into(), &mut res);
+                $name::from(&res)
+            }
+        }
+
+        #[cfg(not(all(target_os = "zkvm", target_arch = "riscv32")))]
         impl<'a, 'b> Add<&'a $name_affine> for &'b $name_affine {
             type Output = $name;
 
@@ -809,6 +913,7 @@ macro_rules! impl_projective_curve_specific {
             }
         }
 
+        #[cfg(not(all(target_os = "zkvm", target_arch = "riscv32")))]
         fn double(&self) -> Self {
             // http://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian-0.html#doubling-dbl-2009-l
             //
@@ -846,6 +951,7 @@ macro_rules! impl_projective_curve_specific {
             unimplemented!()
         }
 
+        #[cfg(not(all(target_os = "zkvm", target_arch = "riscv32")))]
         fn double(&self) -> Self {
             // http://www.hyperelliptic.org/EFD/g1p/auto-shortw-jacobian.html#doubling-dbl-2007-bl
             //
